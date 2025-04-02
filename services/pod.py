@@ -1,0 +1,199 @@
+from typing import Dict, Optional, Any
+from kubernetes import client, config
+from kubernetes.client.exceptions import ApiException
+from core.executor import KubernetesCommandExecutor
+import logging
+import json
+
+logger = logging.getLogger("kubectl-mcp.pod")
+
+class PodService:
+    def __init__(self, executor: Optional[KubernetesCommandExecutor] = None):
+        try:
+            config.load_kube_config()
+            self.core_v1 = client.CoreV1Api()
+            self._exec = executor or KubernetesCommandExecutor()
+        except Exception as e:
+            logger.error(f"Failed to initialize Kubernetes client: {e}")
+            raise
+
+    # Create
+    def create_pod(
+        self,
+        name: str,
+        namespace: str = "default",
+        image: str = "nginx:latest",
+        labels: Optional[Dict[str, str]] = None,
+        env_vars: Optional[Dict[str, str]] = None
+    ) -> Dict[str, Any]:
+        """
+        Create a pod using Kubernetes client
+        Args:
+            name: Pod name
+            namespace: Target namespace
+            image: Container image
+            labels: Pod labels
+            env_vars: Environment variables
+        Returns:
+            Operation result
+        """
+        try:
+            env = [client.V1EnvVar(name=k, value=v) for k, v in (env_vars or {}).items()]
+            
+            pod_manifest = {
+                "apiVersion": "v1",
+                "kind": "Pod",
+                "metadata": {
+                    "name": name,
+                    "labels": labels or {"app": name}
+                },
+                "spec": {
+                    "containers": [{
+                        "name": name,
+                        "image": image,
+                        "env": env
+                    }]
+                }
+            }
+            
+            resp = self.core_v1.create_namespaced_pod(
+                namespace=namespace,
+                body=pod_manifest
+            )
+            
+            return {
+                "success": True,
+                "status": resp.status,
+                "pod_ip": resp.status.pod_ip,
+                "message": f"Pod {name} created"
+            }
+            
+        except ApiException as e:
+            error_msg = f"K8s API error: {json.loads(e.body)['message']}"
+            logger.error(error_msg)
+            return self._exec._error_result("kubectl", error_msg)
+
+    # Read
+    def get_pod(self, name: str, namespace: str = "default") -> Dict[str, Any]:
+        """
+        Get pod details
+        Args:
+            name: Pod name
+            namespace: Target namespace
+        Returns:
+            Pod information or error
+        """
+        try:
+            resp = self.core_v1.read_namespaced_pod(name, namespace)
+            return {
+                "success": True,
+                "pod": {
+                    "name": resp.metadata.name,
+                    "status": resp.status.phase,
+                    "ip": resp.status.pod_ip,
+                    "node": resp.spec.node_name,
+                    "labels": resp.metadata.labels
+                }
+            }
+        except ApiException:
+            # Fallback to kubectl if API fails
+            cmd = f"kubectl get pod {name} -n {namespace} -o json"
+            return self._exec.execute(cmd)
+
+    # Update
+    def update_pod_labels(
+        self,
+        name: str,
+        labels: Dict[str, str],
+        namespace: str = "default"
+    ) -> Dict[str, Any]:
+        """
+        Update pod labels
+        Args:
+            name: Pod name
+            labels: New labels (will merge with existing)
+            namespace: Target namespace
+        Returns:
+            Operation result
+        """
+        try:
+            body = {"metadata": {"labels": labels}}
+            resp = self.core_v1.patch_namespaced_pod(
+                name=name,
+                namespace=namespace,
+                body=body
+            )
+            return {
+                "success": True,
+                "message": f"Labels updated for pod {name}",
+                "new_labels": resp.metadata.labels
+            }
+        except ApiException as e:
+            return self._exec._error_result(
+                "kubectl",
+                f"Label update failed: {json.loads(e.body)['message']}"
+            )
+
+    # Delete
+    def delete_pod(
+        self,
+        name: str,
+        namespace: str = "default",
+        grace_period: int = 0
+    ) -> Dict[str, Any]:
+        """
+        Delete a pod
+        Args:
+            name: Pod name
+            namespace: Target namespace
+            grace_period: Grace period in seconds
+        Returns:
+            Operation result
+        """
+        try:
+            self.core_v1.delete_namespaced_pod(
+                name=name,
+                namespace=namespace,
+                grace_period_seconds=grace_period
+            )
+            return {
+                "success": True,
+                "message": f"Pod {name} scheduled for deletion"
+            }
+        except ApiException:
+            # Fallback to kubectl
+            cmd = f"kubectl delete pod {name} -n {namespace} --grace-period={grace_period}"
+            return self._exec.execute(cmd)
+
+    # List
+    def list_pods(
+        self,
+        namespace: str = "default",
+        label_selector: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        List pods with optional filters
+        Args:
+            namespace: Target namespace
+            label_selector: Label selector query
+        Returns:
+            List of pods or error
+        """
+        try:
+            resp = self.core_v1.list_namespaced_pod(
+                namespace=namespace,
+                label_selector=label_selector
+            )
+            return {
+                "success": True,
+                "pods": [{
+                    "name": item.metadata.name,
+                    "status": item.status.phase,
+                    "ip": item.status.pod_ip
+                } for item in resp.items]
+            }
+        except ApiException:
+            # Fallback to kubectl
+            selector = f"-l {label_selector}" if label_selector else ""
+            cmd = f"kubectl get pods -n {namespace} {selector} -o json"
+            return self._exec.execute(cmd)
