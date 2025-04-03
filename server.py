@@ -59,6 +59,11 @@ async def setup_server():
     ):
         return pod_service.list_pods(namespace, label_selector)
     
+    @server.tool("port_forward")
+    async def port_forward(pod_name: str, namespace: str, ports: str):
+        local_port, pod_port = ports.split(":")
+        return pod_service.port_forward(pod_name, namespace, int(local_port), int(pod_port))
+
     # Namespace
     @server.tool("create_namespace")
     async def create_namespace(name: str):

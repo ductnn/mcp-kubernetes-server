@@ -197,3 +197,14 @@ class PodService:
             selector = f"-l {label_selector}" if label_selector else ""
             cmd = f"kubectl get pods -n {namespace} {selector} -o json"
             return self._exec.execute(cmd)
+
+    # Add to PodService class
+    def port_forward(self, pod_name: str, namespace: str, local_port: int, pod_port: int) -> Dict[str, Any]:
+        """Forward local port to pod"""
+        cmd = f"kubectl port-forward {pod_name} -n {namespace} {local_port}:{pod_port}"
+        return self._exec.execute(cmd, timeout_override=3600)  # Long timeout for forwarding
+
+    def exec_command(self, pod_name: str, namespace: str, command: str) -> Dict[str, Any]:
+        """Execute command in pod container"""
+        cmd = f"kubectl exec {pod_name} -n {namespace} -- {command}"
+        return self._exec.execute(cmd)
