@@ -22,6 +22,8 @@ A lightweight MCP server that provides natural language processing and API acces
   - Grace period control
   - Automatic command fallback
 
+**...Updating...**
+
 ## 📦 Installation
 
 ### Prerequisites
