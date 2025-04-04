@@ -5,6 +5,8 @@
 
 A lightweight MCP server that provides natural language processing and API access to Kubernetes clusters, combining both kubectl commands and Kubernetes Python client.
 
+https://github.com/user-attachments/assets/48e061cd-3e85-40ff-ab04-a1a2b9bbd152
+
 ## ✨ Features
 
 - **Natural Language Interface**: Convert plain English queries to kubectl commands
