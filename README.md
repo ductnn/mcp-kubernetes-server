@@ -1,6 +1,6 @@
 # Kubernetes MCP Server 
 
-[![Python Version](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
+[![Python Version](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
 A lightweight MCP server that provides natural language processing and API access to Kubernetes clusters, combining both kubectl commands and Kubernetes Python client.
@@ -10,8 +10,10 @@ https://github.com/user-attachments/assets/48e061cd-3e85-40ff-ab04-a1a2b9bbd152
 ## ✨ Features
 
 - **Natural Language Interface**: Convert plain English queries to kubectl commands
+  - List pods and deployments across all namespaces
+  - Fallback to general resource listing for unsupported queries
 - **Full CRUD Operations**:
-  - 🆕 Create/Delete namespaces, pods, and deployments
+  - 🆕 Create/Delete namespaces, pods, and deployments via API endpoints
   - 🔍 Inspect cluster resources
   - ✏️ Modify labels, annotations, and deployment configurations
   - 🗑️ Graceful deletion
@@ -27,8 +29,6 @@ https://github.com/user-attachments/assets/48e061cd-3e85-40ff-ab04-a1a2b9bbd152
   - Resource management (CPU, memory)
   - Environment variable configuration
 
-**...Updating...**
-
 ## 📦 Installation
 
 ### Prerequisites
@@ -36,8 +36,6 @@ https://github.com/user-attachments/assets/48e061cd-3e85-40ff-ab04-a1a2b9bbd152
 - Kubernetes cluster access
 - `kubectl` configured locally
 - [UV](https://github.com/astral-sh/uv) installed
-
-
 
 ```bash
 # Clone repository
@@ -54,7 +52,57 @@ source .venv/bin/activate
 uv pip install -r requirements.txt
 ```
 
-## Usage with AI Assistants
+## 🚀 Usage
+
+### Natural Language Processing
+
+The server supports basic natural language queries for listing resources:
+
+```python
+# List all pods
+result = nl_processor.process("Show me all pods")
+
+# List all deployments
+result = nl_processor.process("Show me all deployments")
+
+# Query with namespace
+result = nl_processor.process("Show me all resources", "kube-system")
+```
+
+For more complex operations, use the dedicated API endpoints:
+
+```python
+# Create a pod
+pod_service.create_pod(
+    name="my-pod",
+    namespace="default",
+    image="nginx:latest",
+    labels={"app": "my-app"}
+)
+
+# Create a deployment
+deployment_service.create_deployment(
+    name="my-deployment",
+    namespace="default",
+    image="nginx:latest",
+    replicas=3
+)
+
+# Delete a namespace
+namespace_service.delete("my-namespace", force=True)
+```
+
+### API Endpoints
+
+The server provides RESTful endpoints for all operations:
+
+- `/api/pods` - Pod operations
+- `/api/deployments` - Deployment operations
+- `/api/namespaces` - Namespace operations
+- `/api/cluster` - Cluster operations
+- `/api/nlp` - Natural language processing
+
+## 🤖 Usage with AI Assistants
 
 ### Claude Desktop
 
@@ -78,33 +126,21 @@ uv pip install -r requirements.txt
 
 - Then, restart your Claude Desktop and play :)
 
-## API Endpoints
+## 🧪 Testing
 
-### Pod Management
-- `create_pod`: Create a new pod
-- `get_pod`: Get pod details
-- `update_pod_labels`: Update pod labels
-- `delete_pod`: Delete a pod
-- `list_pods`: List pods with optional filters
-- `port_forward`: Forward local port to pod
+Run the test suite:
 
-### Deployment Management
-- `create_deployment`: Create a new deployment with customizable parameters
-- `get_deployment`: Get deployment details
-- `update_deployment`: Update deployment configuration
-- `delete_deployment`: Delete a deployment
-- `list_deployments`: List deployments with optional filters
-- `scale_deployment`: Scale a deployment to a specific number of replicas
+```bash
+# Run all tests
+pytest
 
-### Namespace Management
-- `create_namespace`: Create a new namespace
+# Run specific test file
+pytest tests/unit/test_pod_service.py
 
-### Cluster Management
-- `cluster_ping`: Check cluster connectivity
+# Run with coverage
+pytest --cov=.
+```
 
-## 🤝 Contributing
-- Fork the project
-- Create your feature branch (git checkout -b feature/AmazingFeature)
-- Commit changes (git commit -m 'Add some amazing feature')
-- Push to branch (git push origin feature/AmazingFeature)
-- Open a Pull Request
+## 📝 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
