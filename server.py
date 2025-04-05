@@ -6,6 +6,7 @@ from core.processor import NaturalLanguageProcessor
 from services.namespace import NamespaceService
 from services.cluster import ClusterService
 from services.pod import PodService
+from services.deployment import DeploymentService
 
 logger = logging.getLogger("kubectl-mcp.server")
 
@@ -15,6 +16,7 @@ async def setup_server():
     namespace_service = NamespaceService(executor)
     cluster_service = ClusterService(executor)
     pod_service = PodService(executor)
+    deployment_service = DeploymentService(executor)
     
     server = FastMCP("kubectl-mcp-server")
     
@@ -63,6 +65,59 @@ async def setup_server():
     async def port_forward(pod_name: str, namespace: str, ports: str):
         local_port, pod_port = ports.split(":")
         return pod_service.port_forward(pod_name, namespace, int(local_port), int(pod_port))
+
+    # Deployment endpoints
+    @server.tool("create_deployment")
+    async def create_deployment(
+        name: str,
+        namespace: str = "default",
+        image: str = "nginx:latest",
+        replicas: int = 1,
+        labels: Optional[Dict[str, str]] = None,
+        env_vars: Optional[Dict[str, str]] = None,
+        container_port: Optional[int] = None,
+        resources: Optional[Dict[str, Dict[str, str]]] = None
+    ):
+        return deployment_service.create_deployment(
+            name, namespace, image, replicas, labels, env_vars, container_port, resources
+        )
+    
+    @server.tool("get_deployment")
+    async def get_deployment(name: str, namespace: str = "default"):
+        return deployment_service.get_deployment(name, namespace)
+    
+    @server.tool("update_deployment")
+    async def update_deployment(
+        name: str,
+        namespace: str = "default",
+        replicas: Optional[int] = None,
+        image: Optional[str] = None,
+        labels: Optional[Dict[str, str]] = None
+    ):
+        return deployment_service.update_deployment(name, namespace, replicas, image, labels)
+    
+    @server.tool("delete_deployment")
+    async def delete_deployment(
+        name: str,
+        namespace: str = "default",
+        grace_period: int = 0
+    ):
+        return deployment_service.delete_deployment(name, namespace, grace_period)
+    
+    @server.tool("list_deployments")
+    async def list_deployments(
+        namespace: str = "default",
+        label_selector: Optional[str] = None
+    ):
+        return deployment_service.list_deployments(namespace, label_selector)
+    
+    @server.tool("scale_deployment")
+    async def scale_deployment(
+        name: str,
+        replicas: int,
+        namespace: str = "default"
+    ):
+        return deployment_service.scale_deployment(name, replicas, namespace)
 
     # Namespace
     @server.tool("create_namespace")
