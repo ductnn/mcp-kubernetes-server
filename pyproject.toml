@@ -7,4 +7,5 @@ requires-python = ">=3.11"
 dependencies = [
     "kubernetes>=32.0.1",
     "mcp>=1.6.0",
+    "pytest>=8.3.5",
 ]
