@@ -2,6 +2,7 @@ from typing import Dict, Optional, Any
 from kubernetes import client, config
 from kubernetes.client.exceptions import ApiException
 from core.executor import KubernetesCommandExecutor
+from core.sse import sse_manager
 import logging
 import json
 
@@ -17,7 +18,7 @@ class DeploymentService:
             logger.error(f"Failed to initialize Kubernetes client: {e}")
             raise
 
-    def create_deployment(
+    async def create_deployment(
         self,
         name: str,
         namespace: str = "default",
@@ -76,18 +77,32 @@ class DeploymentService:
                 body=deployment
             )
 
-            return {
+            result = {
                 "success": True,
                 "status": resp.status,
                 "message": f"Deployment {name} created"
             }
+            
+            # Notify SSE clients about the new deployment
+            await sse_manager.notify_resource_change(
+                "deployment", 
+                "created", 
+                {
+                    "name": name,
+                    "namespace": namespace,
+                    "replicas": replicas,
+                    "available": resp.status.available_replicas
+                }
+            )
+            
+            return result
 
         except ApiException as e:
             error_msg = f"K8s API error: {json.loads(e.body)['message']}"
             logger.error(error_msg)
             return self._exec._error_result("kubectl", error_msg)
 
-    def get_deployment(self, name: str, namespace: str = "default") -> Dict[str, Any]:
+    async def get_deployment(self, name: str, namespace: str = "default") -> Dict[str, Any]:
         """
         Get deployment details
         Args:
@@ -112,7 +127,7 @@ class DeploymentService:
             cmd = f"kubectl get deployment {name} -n {namespace} -o json"
             return self._exec.execute(cmd)
 
-    def update_deployment(
+    async def update_deployment(
         self,
         name: str,
         namespace: str = "default",
@@ -151,18 +166,33 @@ class DeploymentService:
                 body=body
             )
 
-            return {
+            result = {
                 "success": True,
                 "message": f"Deployment {name} updated",
                 "status": resp.status
             }
+            
+            # Notify SSE clients about the deployment update
+            await sse_manager.notify_resource_change(
+                "deployment", 
+                "updated", 
+                {
+                    "name": name,
+                    "namespace": namespace,
+                    "replicas": replicas if replicas is not None else resp.spec.replicas,
+                    "available": resp.status.available_replicas
+                }
+            )
+            
+            return result
+            
         except ApiException as e:
             return self._exec._error_result(
                 "kubectl",
                 f"Deployment update failed: {json.loads(e.body)['message']}"
             )
 
-    def delete_deployment(
+    async def delete_deployment(
         self,
         name: str,
         namespace: str = "default",
@@ -183,15 +213,29 @@ class DeploymentService:
                 namespace=namespace,
                 grace_period_seconds=grace_period
             )
-            return {
+            
+            result = {
                 "success": True,
                 "message": f"Deployment {name} scheduled for deletion"
             }
+            
+            # Notify SSE clients about the deployment deletion
+            await sse_manager.notify_resource_change(
+                "deployment", 
+                "deleted", 
+                {
+                    "name": name,
+                    "namespace": namespace
+                }
+            )
+            
+            return result
+            
         except ApiException:
             cmd = f"kubectl delete deployment {name} -n {namespace} --grace-period={grace_period}"
             return self._exec.execute(cmd)
 
-    def list_deployments(
+    async def list_deployments(
         self,
         namespace: str = "default",
         label_selector: Optional[str] = None
@@ -223,7 +267,7 @@ class DeploymentService:
             cmd = f"kubectl get deployments -n {namespace} {selector} -o json"
             return self._exec.execute(cmd)
 
-    def scale_deployment(
+    async def scale_deployment(
         self,
         name: str,
         replicas: int,
@@ -244,11 +288,27 @@ class DeploymentService:
                 namespace=namespace,
                 body={"spec": {"replicas": replicas}}
             )
-            return {
+            
+            result = {
                 "success": True,
                 "message": f"Deployment {name} scaled to {replicas} replicas",
                 "status": resp.status
             }
+            
+            # Notify SSE clients about the deployment scale
+            await sse_manager.notify_resource_change(
+                "deployment", 
+                "scaled", 
+                {
+                    "name": name,
+                    "namespace": namespace,
+                    "replicas": replicas,
+                    "available": resp.status.available_replicas
+                }
+            )
+            
+            return result
+            
         except ApiException as e:
             return self._exec._error_result(
                 "kubectl",
