@@ -1,4 +1,4 @@
-from typing import Dict, Optional, Any, List, Tuple
+from typing import Dict, Optional, Any, List
 from core.executor import KubernetesCommandExecutor
 from core.helm_executor import HelmCommandExecutor
 import re
@@ -55,7 +55,7 @@ class NaturalLanguageProcessor:
         
         # Helm Uninstall commands
         r"(?:uninstall|delete|remove)\s+(?:helm\s+)?release\s+(?:named\s+)?([a-z0-9-]+)(?:\s+in\s+namespace\s+([a-z0-9-]+))?(?:\s+keep\s+history)?": 
-            "helm uninstall {1}" + " -n {2}" if "{2}" else "" + " --keep-history" if "keep history" in query else "",
+            "helm uninstall {1}" + " -n {2}" if "{2}" else "" + " --keep-history" if "keep history" in query else "", # type: ignore
         
         # Helm Rollback commands
         r"rollback\s+(?:helm\s+)?release\s+(?:named\s+)?([a-z0-9-]+)\s+to\s+revision\s+(\d+)(?:\s+in\s+namespace\s+([a-z0-9-]+))?": 
