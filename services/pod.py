@@ -2,6 +2,7 @@ from typing import Dict, Optional, Any
 from kubernetes import client, config
 from kubernetes.client.exceptions import ApiException
 from core.executor import KubernetesCommandExecutor
+from core.sse import sse_manager
 import logging
 import json
 
@@ -18,7 +19,7 @@ class PodService:
             raise
 
     # Create
-    def create_pod(
+    async def create_pod(
         self,
         name: str,
         namespace: str = "default",
@@ -61,12 +62,26 @@ class PodService:
                 body=pod_manifest
             )
             
-            return {
+            result = {
                 "success": True,
                 "status": resp.status,
                 "pod_ip": resp.status.pod_ip,
                 "message": f"Pod {name} created"
             }
+            
+            # Notify SSE clients about the new pod
+            await sse_manager.notify_resource_change(
+                "pod", 
+                "created", 
+                {
+                    "name": name,
+                    "namespace": namespace,
+                    "status": resp.status.phase,
+                    "pod_ip": resp.status.pod_ip
+                }
+            )
+            
+            return result
             
         except ApiException as e:
             error_msg = f"K8s API error: {json.loads(e.body)['message']}"
@@ -74,7 +89,7 @@ class PodService:
             return self._exec._error_result("kubectl", error_msg)
 
     # Read
-    def get_pod(self, name: str, namespace: str = "default") -> Dict[str, Any]:
+    async def get_pod(self, name: str, namespace: str = "default") -> Dict[str, Any]:
         """
         Get pod details
         Args:
@@ -101,7 +116,7 @@ class PodService:
             return self._exec.execute(cmd)
 
     # Update
-    def update_pod_labels(
+    async def update_pod_labels(
         self,
         name: str,
         labels: Dict[str, str],
@@ -123,11 +138,26 @@ class PodService:
                 namespace=namespace,
                 body=body
             )
-            return {
+            
+            result = {
                 "success": True,
                 "message": f"Labels updated for pod {name}",
                 "new_labels": resp.metadata.labels
             }
+            
+            # Notify SSE clients about the pod update
+            await sse_manager.notify_resource_change(
+                "pod", 
+                "updated", 
+                {
+                    "name": name,
+                    "namespace": namespace,
+                    "labels": resp.metadata.labels
+                }
+            )
+            
+            return result
+            
         except ApiException as e:
             return self._exec._error_result(
                 "kubectl",
@@ -135,7 +165,7 @@ class PodService:
             )
 
     # Delete
-    def delete_pod(
+    async def delete_pod(
         self,
         name: str,
         namespace: str = "default",
@@ -156,17 +186,31 @@ class PodService:
                 namespace=namespace,
                 grace_period_seconds=grace_period
             )
-            return {
+            
+            result = {
                 "success": True,
                 "message": f"Pod {name} scheduled for deletion"
             }
+            
+            # Notify SSE clients about the pod deletion
+            await sse_manager.notify_resource_change(
+                "pod", 
+                "deleted", 
+                {
+                    "name": name,
+                    "namespace": namespace
+                }
+            )
+            
+            return result
+            
         except ApiException:
             # Fallback to kubectl
             cmd = f"kubectl delete pod {name} -n {namespace} --grace-period={grace_period}"
             return self._exec.execute(cmd)
 
     # List
-    def list_pods(
+    async def list_pods(
         self,
         namespace: str = "default",
         label_selector: Optional[str] = None
@@ -199,12 +243,12 @@ class PodService:
             return self._exec.execute(cmd)
 
     # Add to PodService class
-    def port_forward(self, pod_name: str, namespace: str, local_port: int, pod_port: int) -> Dict[str, Any]:
+    async def port_forward(self, pod_name: str, namespace: str, local_port: int, pod_port: int) -> Dict[str, Any]:
         """Forward local port to pod"""
         cmd = f"kubectl port-forward {pod_name} -n {namespace} {local_port}:{pod_port}"
         return self._exec.execute(cmd, timeout_override=3600)  # Long timeout for forwarding
 
-    def exec_command(self, pod_name: str, namespace: str, command: str) -> Dict[str, Any]:
+    async def exec_command(self, pod_name: str, namespace: str, command: str) -> Dict[str, Any]:
         """Execute command in pod container"""
         cmd = f"kubectl exec {pod_name} -n {namespace} -- {command}"
         return self._exec.execute(cmd)

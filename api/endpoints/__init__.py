@@ -13,6 +13,7 @@ from .deployment_endpoints import register_deployment_endpoints
 from .namespace_endpoints import register_namespace_endpoints
 from .cluster_endpoints import register_cluster_endpoints
 from .nlp_endpoints import register_nlp_endpoints
+from .sse_endpoints import register_sse_endpoints
 
 def register_all_endpoints(server: FastMCP, executor: KubernetesCommandExecutor):
     """Register all API endpoints with the server"""
@@ -29,4 +30,7 @@ def register_all_endpoints(server: FastMCP, executor: KubernetesCommandExecutor)
     register_pod_endpoints(server, pod_service)
     register_deployment_endpoints(server, deployment_service)
     register_namespace_endpoints(server, namespace_service)
-    register_cluster_endpoints(server, cluster_service) 
+    register_cluster_endpoints(server, cluster_service)
+    
+    # Register SSE endpoints
+    register_sse_endpoints(server) 
